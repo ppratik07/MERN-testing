@@ -1,43 +1,54 @@
-import {describe, expect, test, it} from 'vitest';
-import request from "supertest";
-import { app } from "../index"
+import express from "express";
+import { z } from "zod";
+import { prismaClient } from "../db";
 
-describe("POST /sum", () => {
-  it("should return the sum of two numbers", async () => {
-      const res = await request(app).post("/sum").send({
-        a: 1,
-        b: 2
-      });
-      expect(res.statusCode).toBe(200);
-      expect(res.body.answer).toBe(3);
-    });
+export const app = express();
+app.use(express.json());
 
-    it("should return 411 if no inputs are provided", async () => {
-      const res = await request(app).post("/sum").send({});
-      expect(res.statusCode).toBe(411);
-      expect(res.body.message).toBe("Incorrect inputs");
-    });
+const sumInput = z.object({
+    a: z.number(),
+    b: z.number()
+})
 
+app.post("/sum", async (req, res) => {
+    const parsedResponse = sumInput.safeParse(req.body)
+    
+    if (!parsedResponse.success) {
+        return res.status(411).json({
+            message: "Incorrect inputs"
+        })
+    }
+
+    const answer = parsedResponse.data.a + parsedResponse.data.b;
+
+    await prismaClient.sum.create({
+        data: {
+            a: parsedResponse.data.a,
+            b: parsedResponse.data.b,
+            result: answer
+        }
+    })
+
+    res.json({
+        answer
+    })
 });
 
-
-describe("GET /sum", () => {
-  it("should return the sum of two numbers", async () => {
-      const res = await request(app)
-        .get("/sum")
-        .set({
-          a: "1",
-          b: "2"
+app.get("/sum", (req, res) => {
+    const parsedResponse = sumInput.safeParse({
+        a: Number(req.headers["a"]),
+        b: Number(req.headers["b"])
+    })
+    
+    if (!parsedResponse.success) {
+        return res.status(411).json({
+            message: "Incorrect inputs"
         })
-        .send();
-      expect(res.statusCode).toBe(200);
-      expect(res.body.answer).toBe(3);
-  });
+    }
 
-  it("should return 411 if no inputs are provided", async () => {
-    const res = await request(app)
-      .get("/sum").send();
-    expect(res.statusCode).toBe(411);
-  });
+    const answer = parsedResponse.data.a + parsedResponse.data.b;
 
+    res.json({
+        answer
+    })
 });
